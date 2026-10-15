@@ -1,0 +1,59 @@
+`timescale 1ns/1ps
+
+module tb_timer_analyzer;
+  
+  logic tb_clk;
+  logic tb_pulse_in;
+  logic tb_mode_select;
+  logic tb_rst_n;
+  logic [7:0] tb_increment_now;
+  logic [7:0] tb_div_result;
+  
+  
+  timer_analyzer uut
+  (
+    .clk(tb_clk),
+    .pulse_in(tb_pulse_in),
+    .mode_select(tb_mode_select),
+    .rst_n(tb_rst_n),
+    .increment_now(tb_increment_now),
+    .div_result(tb_div_result)
+  );
+  
+  
+  initial begin
+    $dumpfile("dump.vcd");
+    $dumpvars(0, tb_timer_analyzer);
+    tb_pulse_in = 0;
+    tb_mode_select = 0;
+	tb_rst_n = 0;
+    #10 tb_rst_n = 1;
+  end
+  
+  
+  initial begin
+    tb_clk = 0;
+    forever #5 tb_clk = ~tb_clk;
+  end
+  
+ initial begin
+   for (int i = 0; i < 20; i = i + 1)
+     begin
+   #($urandom_range(5, 25));  
+   tb_mode_select = $urandom_range(0, 1);
+     end
+ end
+  initial begin
+    for (int d = 0; d < 30; d = d + 1)
+      begin
+      #($urandom_range(1, 20));
+      tb_pulse_in = 1'b1;
+      #5;
+      tb_pulse_in = 1'b0;
+      end
+  end
+   initial begin
+     #500;
+     $finish;
+   end
+endmodule
