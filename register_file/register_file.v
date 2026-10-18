@@ -9,7 +9,7 @@ input logic       clk,
 input logic       rst_n,
 input logic       write_enable,
 output logic [7:0] rd_data_0,
-output logic [7:0] rd_data_1,
+output logic [7:0] rd_data_1
 
 );
 
@@ -26,7 +26,7 @@ begin
 		end
 	end 
 	else begin
-	if (write_enable &&  !(wr_addr == 3'b00))
+	if (write_enable &&  !(wr_addr == 3'b000))
 		begin
 		rf[wr_addr] <= wr_data;
 		end
@@ -35,19 +35,30 @@ end
 
 always_comb
 begin
-	if(rd_addr_0 == 3'b000)
-	begin
-	rd_data_0 = 8'd0;
-	end else begin
-	rd_data_0 = rf[rd_addr_0];
+	if(rd_addr_0 == 3'd0) begin
+		rd_data_0 = 8'd0;
+	end
+	else if((rd_addr_0 == wr_addr) && write_enable) begin
+		rd_data_0 = wr_data;
+	end
+	else begin
+		rd_data_0 = rf[rd_addr_0];
 	end
 
-	if(rd_addr_1 == 3'b000)
-	begin
-	rd_data_1 = 8'd0;
-	end else begin
-	rd_data_1 = rf[rd_addr_1];
+end
+
+always_comb
+begin
+	if(rd_addr_1 == 3'd0) begin
+		rd_data_1 = 8'd0;
 	end
+	else if((rd_addr_1 == wr_addr) && write_enable) begin
+		rd_data_1 = wr_data;
+	end
+	else begin
+		rd_data_1 = rf[rd_addr_1];
+	end
+
 end
 
 endmodule
