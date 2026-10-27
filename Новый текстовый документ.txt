@@ -1,0 +1,76 @@
+module signal
+(
+    input logic clk,
+    input logic rst_n,
+    input logic packet_sync,
+    input logic bit_error,
+    output logic processing,
+    output logic error_flag
+);
+
+logic [1:0] clk_counter;
+logic count_enable;
+logic [1:0] current_state;
+logic [1:0] next_state;
+logic bit_error_reg;
+logic bit_error_reg_next;
+
+always_ff @(posedge clk or negedge rst_n)
+begin
+    if(~rst_n)
+    begin
+    clk_counter <= 2'b00;
+    current_state <= 2'b00;
+    bit_error_reg <= 1'b0;
+    end else begin
+    if(count_enable)
+        begin clk_counter <= clk_counter + 1'b1; end
+    else begin clk_counter <= 2'b00; end
+    current_state <= next_state;
+    bit_error_reg <= bit_error_reg_next;
+end
+end
+
+always_comb
+begin
+    count_enable = 1'b0;
+    next_state = 1'b0;
+    processing = 1'b0;
+    error_flag = 1'b0;
+    bit_error_reg_next = 1'b0;
+
+    case (current_state) 
+    2'b00 : begin
+        if (packet_sync == 1'b1)
+        begin 
+        next_state = 2'b01;
+        end else begin next_state = 2'b00; end 
+    end
+    2'b01 : begin
+        processing = 1'b1;
+        if (clk_counter != 2'b11)
+        begin 
+            count_enable = 1'b1;
+            if(bit_error)
+            begin bit_error_reg_next = 1'b1; end
+        end else begin
+            next_state = 1'b10;
+        end
+    end
+
+    2'b10 : begin
+        if (bit_error_reg)
+        begin error_flag = 1'b1; end
+        else begin
+            error_flag = 1'b0; end
+        bit_error_reg_next = 1'b0;
+        next_state = 2'b00;
+    end
+
+    default : next_state = 2'b00;
+    endcase
+end
+
+
+
+endmodule
