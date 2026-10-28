@@ -14,7 +14,7 @@ localparam logic [1:0] IDLE = 2'b00;
 localparam logic [1:0] RECEIVE = 2'b01;
 localparam logic [1:0] VALIDATE = 2'b10;
 
-logic [3:0] clk_counter;
+logic [2:0] clk_counter;
 logic [1:0] current_state;
 logic [1:0] next_state;
 logic counter_enable;
@@ -61,15 +61,18 @@ begin
         parity_error_reg_next = parity_error_reg | (data_bit ^ parity_bit);  
         if (clk_counter != 3'd7)
         begin next_state = RECEIVE; end 
-        else begin next = VALIDATE; end
+        else begin next_state = VALIDATE; end
     end
 
     VALIDATE : begin
         if(parity_error_reg)
-        begin packet_valid = 1'b1; end
-        else begin packet_error = 1'b1; end
+            begin packet_error = 1'b1; end
+        else begin packet_valid = 1'b1; end
         next_state = IDLE;
     end
+
+    default : next_state = IDLE;
+
     endcase
 end
 
