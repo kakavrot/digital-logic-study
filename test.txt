@@ -16,8 +16,8 @@ module packet_receiver
 
  logic [1:0] current_state;
  logic [1:0] next_state;
- logic [2:0] clk_incrementor;
- logic [2:0] clk_incrementor_next;
+ logic [3:0] clk_incrementor;
+ logic [3:0] clk_incrementor_next;
  logic parity_error;
  logic parity_error_next;
 
@@ -41,7 +41,7 @@ module packet_receiver
 clk_incrementor_next = clk_incrementor;
 packet_valid = 1'b0;
 packet_error = 1'b0;
-next_state = 3'b000;
+next_state = 2'b00;
 ready = 1'b0;
 parity_error_next = parity_error;
 
@@ -54,7 +54,6 @@ parity_error_next = parity_error;
         else begin
             next_state = IDLE;
             ready = 1'b1;
-            clk_incrementor_next = 2'b00;
         end
     end
 
@@ -75,7 +74,9 @@ parity_error_next = parity_error;
         else begin
             packet_valid = 1'b1;
         end
-        next_state = IDLE;
+        if(start_packet)
+        begin next_state = RECEIVE; end
+        else begin next_state = IDLE; end
     end
     endcase
  end
