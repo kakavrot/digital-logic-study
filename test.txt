@@ -29,7 +29,7 @@ module packet_receiver
         clk_incrementor <= 3'b000;
         parity_error <= 1'b0;
     end else begin
-        packet_error <= parity_error_next;
+        parity_error <= parity_error_next;
         current_state <= next_state;
         clk_incrementor <= clk_incrementor_next;
     end
@@ -59,10 +59,10 @@ parity_error_next = parity_error;
     end
 
     RECEIVE : begin
+        parity_error_next = parity_error | (data_bit ^ parity_bit);
         if (clk_incrementor != 3'd7)
         begin
             clk_incrementor_next = clk_incrementor + 1'b1;
-            parity_error_next = parity_error | (data_bit ^ parity_bit);
             next_state = RECEIVE;
         end else begin
             next_state = VALIDATE;
