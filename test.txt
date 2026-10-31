@@ -2,7 +2,7 @@ module packet_receiver
 (
     input logic clk,
     input logic rst_n,
-    input logic start_of_packet,
+    input logic start_packet,
     input logic data_bit,
     input logic parity_bit,
     output logic ready,
@@ -10,74 +10,78 @@ module packet_receiver
     output logic packet_error
 );
 
-localparam logic [1:0] IDLE = 2'b00;
-localparam logic [1:0] RECEIVE = 2'b01;
-localparam logic [1:0] VALIDATE = 2'b10;
+ localparam logic [1:0] IDLE = 2'b00;
+ localparam logic [1:0] RECEIVE = 2'b01;
+ localparam logic [1:0] VALIDATE = 2'b10;
 
-logic [2:0] clk_counter;
-logic [1:0] current_state;
-logic [1:0] next_state;
-logic counter_enable;
-logic parity_error_reg;
-logic parity_error_reg_next;
+ logic [1:0] current_state;
+ logic [1:0] next_state;
+ logic [2:0] clk_incrementor;
+ logic [2:0] clk_incrementor_next;
+ logic parity_error;
+ logic parity_error_next;
 
-always_ff @(posedge clk or negedge rst_n)
-begin
+ always_ff @(posedge clk or negedge rst_n)
+ begin
     if(~rst_n)
-        begin
-        clk_counter <= 3'b000;
+    begin
         current_state <= 2'b00;
-        parity_error_reg <= 1'b0;
+        clk_incrementor <= 3'b000;
+        parity_error <= 1'b0;
     end else begin
-    if (counter_enable)
-    begin clk_counter <= clk_counter + 1'b1; end
-    else begin clk_counter <= 1'b0; end
-    current_state <= next_state;
-    parity_error_reg <= parity_error_reg_next;
+        packet_error <= parity_error_next;
+        current_state <= next_state;
+        clk_incrementor <= clk_incrementor_next;
     end
-end 
+ end
 
-always_comb
-begin
+ always_comb
+ begin
 
-    ready = 1'b0;
-    packet_valid = 1'b0;
-    packet_error = 1'b0;
-    counter_enable = 1'b0;
-    next_state = 1'b0;
-    parity_error_reg_next = 1'b0;
+clk_incrementor_next = clk_incrementor;
+packet_valid = 1'b0;
+packet_error = 1'b0;
+next_state = 3'b000;
+ready = 1'b0;
+parity_error_next = parity_error;
 
     case(current_state)
     IDLE : begin
-        if(~start_of_packet)
-        begin
-            ready = 1'b1;
+        clk_incrementor_next = 3'b000;
+        parity_error_next = 1'b0;
+        if (start_packet)
+        begin next_state = RECEIVE; end
+        else begin
             next_state = IDLE;
-        end else begin next_state = RECEIVE; end
+            ready = 1'b1;
+            clk_incrementor_next = 2'b00;
+        end
     end
 
     RECEIVE : begin
-        counter_enable = 1'b1;
-        parity_error_reg_next = parity_error_reg | (data_bit ^ parity_bit);  
-        if (clk_counter != 3'd7)
-        begin next_state = RECEIVE; end 
-        else begin next_state = VALIDATE; end
+        if (clk_incrementor != 3'd7)
+        begin
+            clk_incrementor_next = clk_incrementor + 1'b1;
+            parity_error_next = parity_error | (data_bit ^ parity_bit);
+            next_state = RECEIVE;
+        end else begin
+            next_state = VALIDATE;
+        end
     end
 
     VALIDATE : begin
-        if(parity_error_reg)
-            begin packet_error = 1'b1; end
-        else begin packet_valid = 1'b1; end
+        if(parity_error)
+        begin packet_error = 1'b1; end
+        else begin
+            packet_valid = 1'b1;
+        end
         next_state = IDLE;
     end
-
-    default : next_state = IDLE;
-
     endcase
-end
-
-
-
-
-
+ end
+        
 endmodule
+
+
+
+
