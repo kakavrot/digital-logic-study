@@ -1,53 +1,216 @@
-module pilse_repiter
+module fsm_logic_voice
 (
     input logic clk,
     input logic rst_n,
-    input logic short_pulse,
-    output logic extended_out
+    input logic ready_read,
+    input logic [1:0] command,
+    input logic [7:0] voice_data,
+    input logic [5:0] step_counter_wire,
+    output logic rst_from_fsm,
+    output logic [7:0] out_bits
 );
 
-logic current_state;
-logic next_state;
-logic [1:0] clk_counter;
-logic [1:0] clk_counter_next;
+localparam logic [3:0] IDLE = 4'b0000;
+localparam logic [3:0] LOADING = 4'b0001;
+localparam logic [3:0] INPUT_NUM_1 = 4'b0010;
+localparam logic [3:0] SHOW_NUM_1 = 4'b0011;
+localparam logic [3:0] INP_OPERATION = 4'b0100;
+localparam logic [3:0] SHOW_VALID_OPERATION = 4'b0101;
+localparam logic [3:0] INPUT_NUM_2 = 4'b0110;
+localparam logic [3:0] SHOW_NUM_2 = 4'b0111;
+localparam logic [3:0] SHOW_RESULT = 4'b1000;
 
-localparam logic STAT_INCREMENT = 1'b0;
-localparam logic END_INCREMENT = 1'b1;
+localparam logic [1:0] START = 2'b00;
+localparam logic [1:0] SUMM_OPCODE = 2'b01;
+localparam logic [1:0] SUBSTRUCT_OPCODE = 2'b10;
+localparam logic [1:0] CANCEL = 2'b11;
+
+logic busy;
+logic busy_next;
+logic [7:0] NUM_1;
+logic [7:0] NUM_1_next;
+logic [7:0] NUM_2;
+logic [7:0] NUM_2_next;
+logic [1:0] current_operation;
+logic [1:0] current_operation_next;
+logic [3:0] current_state;
+logic [3:0] next_state;
+logic [7:0] out_bits_reg;
+logic [7:0] out_bits_reg_next;
+logic result_error_flag;
 
 always_ff @(posedge clk or negedge rst_n)
 begin
-if (~rst_n)
-begin
-    current_state <= STAT_INCREMENT;
-    clk_counter <= 2'b00;
-end else begin
-    current_state <= next_state;
-    clk_counter <= clk_counter_next;
-end
+    if(~rst_n)
+    begin
+        busy <= 1'b0;
+        NUM_1 <= 8'd0;
+        NUM_2 <= 8'd0;
+        current_operation <= 2'd0;
+        current_state <= 4'd0;
+    end else begin
+        current_state <= next_state;
+        out_bits_reg <= out_bits_reg_next;
+        busy <= busy_next;
+        NUM_1 <= NUM_1_next;
+        NUM_2 <= NUM_2_next;
+        current_operation <= current_operation_next;
+        
+        if(ready_read)
+        begin current_operation <= command; end
+        
+    end
 end
 
 always_comb
 begin
-    extended_out = 1'b0;
-    clk_counter_next = clk_counter;
-    next_state = current_state;
 
-    case (current_state)
-    STAT_INCREMENT : begin
-        clk_counter_next = 2'b00;
-        if(short_pulse)
-        begin next_state = END_INCREMENT; end
-        else begin next_state = STAT_INCREMENT; end
-    end
+rst_from_fsm = (next_state != current_state);
+next_state = current_state;
+NUM_1_next = NUM_1;
+NUM_2_next = NUM_2;
+current_operation_next = current_operation;
+busy_next = busy;
+out_bits_reg_next = out_bits_reg;
 
-    END_INCREMENT : begin
-        clk_counter_next = clk_counter + 1'b1;
-        extended_out = 1'b1;
-        if(clk_counter != 2'b11)
-        begin  next_state = END_INCREMENT; end
-        else begin next_state = STAT_INCREMENT; end
-    end
+    unique case(current_state)
+        IDLE : begin
+            if (current_operation == 2'b00)
+            begin
+                next_state = LOADING;
+            end else begin
+                next_state = IDLE;
+                if(step_counter_wire == 4'd5)
+                begin out_bits_reg_next = ~out_bits_reg; end
+            end
+        end
+
+        LOADING : begin
+            if(step_counter_wire == 2'd3)
+            begin 
+                rst_from_fsm = 1'b1;
+                out_bits_reg_next = {1'b1, out_bits_reg[7:1]};
+                if(out_bits_reg == 8'b1111_1111)
+                begin
+                unique case (busy)
+                    1'b0 : begin
+                        next_state = INPUT_NUM_1;
+                        out_bits_reg_next = 8'b0000_0001;
+                    end
+                    
+                    1'b1 : begin
+                        next_state = SHOW_RESULT;
+                        out_bits_reg_next = 8'b0000_0000;
+                    end
+                endcase
+                end
+            end
+        end
+
+        INPUT_NUM_1 : begin
+            busy_next = 1'b1;
+            if(ready_read)
+            begin
+            NUM_1_next = voice_data;
+            next_state = SHOW_NUM_1;
+            end else begin
+            if (step_counter_wire == 4'd4)
+            begin
+            rst_from_fsm = 1'b1;
+            out_bits_reg_next = {out_bits_reg[7:1], ~out_bits_reg[0]};
+            end
+            end
+        end
+
+        SHOW_NUM_1 : begin
+            if(step_counter_wire != 4'd10)
+            begin out_bits_reg_next = NUM_1; end
+            else begin next_state = INP_OPERATION; end
+        end
+
+        INP_OPERATION : begin
+            if(ready_read)
+            begin
+                if((command == SUMM_OPCODE) || (command == SUBSTRUCT_OPCODE))
+                begin
+                    current_operation_next = command;
+                    next_state = SHOW_VALID_OPERATION;
+                end
+            end else begin
+                if (step_counter_wire == 4'd4)
+                begin
+                rst_from_fsm = 1'b1;
+                out_bits_reg_next = {out_bits_reg[7:1], ~out_bits_reg[0]};
+                end
+            end
+        end
+
+        SHOW_VALID_OPERATION : begin
+            out_bits_reg_next = 8'b1111_1111;
+            if (step_counter_wire == 4'd10)
+            begin
+                next_state = INPUT_NUM_2;
+                out_bits_reg_next = 8'b0000_0001;
+            end
+        end
+
+        INPUT_NUM_2 : begin
+            if(ready_read)
+            begin
+            NUM_2_next = voice_data;
+            next_state = SHOW_NUM_2;
+            end else begin
+            if (step_counter_wire == 4'd4)
+            begin
+            rst_from_fsm = 1'b1;
+            out_bits_reg_next = {out_bits_reg[7:1], ~out_bits_reg[0]};
+            end
+            end
+        end
+
+        SHOW_NUM_2 : begin
+            if(step_counter_wire != 4'd10)
+            begin out_bits_reg_next = NUM_2; end
+            else begin next_state = LOADING; end
+        end
+
+        SHOW_RESULT : begin
+            unique case(result_error_flag)
+
+            1'b1 : begin
+                if(step_counter_wire == 6'd63)
+                begin next_state = IDLE; end
+                else begin
+                    unique case(step_counter_wire[2])
+                    1'b0 : out_bits_reg_next = 8'b1010_1010;
+                    1'b1 : out_bits_reg_next = 8'b0101_0101;
+                    endcase
+                end
+            end
+
+            1'b0 : begin
+                if(step_counter_wire == 6'd63)
+                begin next_state = IDLE; end
+                else begin
+                    unique case(current_operation)
+                    2'b01 : out_bits_reg_next = NUM_1 + NUM_2;
+                    2'b10 : out_bits_reg_next = NUM_1 - NUM_2;
+                    2'b00, 2'b11 : out_bits_reg_next = 8'b0000_0000;
+                    endcase
+                end
+            end
+            endcase
+        end
     endcase
+end
+
+always_comb
+begin
+    result_error_flag = 1'b0;
+    next_state = current_state;
+    result_error_flag = ((NUM_1 < NUM_2) && (current_operation == SUBSTRUCT_OPCODE)) || ((({1'b0, NUM_1}) + ({1'b0, NUM_1}) > 9'd255) && (current_operation == SUMM_OPCODE));
+    if(ready_read && (current_operation == CANCEL))
+    begin next_state = IDLE; end           
 end
 
 
