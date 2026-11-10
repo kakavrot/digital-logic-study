@@ -55,10 +55,6 @@ begin
         NUM_1 <= NUM_1_next;
         NUM_2 <= NUM_2_next;
         current_operation <= current_operation_next;
-        
-        if(ready_read)
-        begin current_operation <= command; end
-        
     end
 end
 
@@ -72,6 +68,7 @@ NUM_2_next = NUM_2;
 current_operation_next = current_operation;
 busy_next = busy;
 out_bits_reg_next = out_bits_reg;
+result_error_flag = 1'b0;
 
     unique case(current_state)
         IDLE : begin
@@ -202,16 +199,15 @@ out_bits_reg_next = out_bits_reg;
             endcase
         end
     endcase
+
+    if(ready_read && (current_operation == CANCEL))
+    begin next_state = IDLE; end
+    result_error_flag = ((NUM_1 < NUM_2) && (current_operation == SUBSTRUCT_OPCODE)) || ((({1'b0, NUM_1}) + ({1'b0, NUM_2}) > 9'd255) && (current_operation == SUMM_OPCODE));
+
 end
 
-always_comb
-begin
-    result_error_flag = 1'b0;
-    next_state = current_state;
-    result_error_flag = ((NUM_1 < NUM_2) && (current_operation == SUBSTRUCT_OPCODE)) || ((({1'b0, NUM_1}) + ({1'b0, NUM_1}) > 9'd255) && (current_operation == SUMM_OPCODE));
-    if(ready_read && (current_operation == CANCEL))
-    begin next_state = IDLE; end           
-end
+
+assign out_bits = out_bits_reg;
 
 
 
