@@ -73,8 +73,13 @@ NUM_2_next = NUM_2;
 current_operation_next = current_operation;
 busy_next = busy;
 out_bits_reg_next = out_bits_reg;
-result_error_flag = 1'b0;
 
+if(ready_read && (command  == CANCEL))
+    begin 
+    next_state = IDLE;
+    busy_next  = 1'b0;
+    end
+    
     unique case(current_state)
         IDLE : begin
             if ((ready_read ) && (command == 2'b00))
@@ -111,7 +116,7 @@ result_error_flag = 1'b0;
 
         INPUT_NUM_1 : begin
             busy_next = 1'b1;
-            if(ready_read)
+            if(ready_read && (command != CANCEL))
             begin
             NUM_1_next = voice_data;
             out_bits_reg_next = voice_data;
@@ -164,7 +169,7 @@ result_error_flag = 1'b0;
         end
 
         INPUT_NUM_2 : begin
-            if(ready_read)
+            if(ready_read && (command != CANCEL ))
             begin
             NUM_2_next = voice_data;
             next_state = SHOW_NUM_2;
@@ -214,10 +219,7 @@ result_error_flag = 1'b0;
             endcase
         end
     endcase
-
-    if(ready_read && (current_operation == CANCEL))
-    begin next_state = IDLE; end
-    result_error_flag = ((NUM_1 < NUM_2) && (current_operation == SUBSTRUCT_OPCODE)) || ((({1'b0, NUM_1}) + ({1'b0, NUM_2}) > 9'd255) && (current_operation == SUMM_OPCODE));
+  
     
     unique case(current_operation)
                         2'b01 : alu_next  = NUM_1 + NUM_2;
@@ -230,6 +232,6 @@ end
 
 assign out_bits = out_bits_reg;
 
-
+assign result_error_flag = ((NUM_1 < NUM_2) && (current_operation == SUBSTRUCT_OPCODE)) || ((({1'b0, NUM_1}) + ({1'b0, NUM_2}) > 9'd255) && (current_operation == SUMM_OPCODE));
 
 endmodule
